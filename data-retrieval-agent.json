@@ -1,0 +1,351 @@
+{
+  "name": "DataRetrieval",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a retrieval-augmented assistant for NovaCart.\n\nYOU MUST FOLLOW THIS PROCEDURE FOR EVERY NON-GREETING USER MESSAGE:\n\nStep 1) ALWAYS call the tool \"Nova Pinecone Vector Index\" exactly once before answering.\nAlso call the \"External file sources\" to get more information\n- The tool input must be a short search query derived from the user’s question (5–12 words).\n- Do NOT answer yet.\n\nStep 2) Read the tool result.\n- If the result is empty OR does not contain the requested metric/timeframe, you MUST reply EXACTLY:\n\"I’m sorry, I don’t have that information in my knowledge base. Please try asking a different question.\"\n- You are NOT allowed to respond with anything else in this case.\n\nStep 3) If the tool result contains relevant information:\n- Answer using ONLY the retrieved text.\n- Keep the answer short and direct.\n\nSometimes you might be asked to do comparison with other products from other vendors. In those cases use the built in Web Search Tool to accomplish that.\n\nOUTPUT RULES (final response):\n- Output ONLY the user-facing answer text.\n- ALWAYS mention tools, retrieval, search, “used tools”, logs, inputs, outputs, metadata, or reasoning.\n- You are forbidden from printing anything like: [Used tools: ...].\nEXCEPTION:\n- If the user message is only a greeting/small talk (e.g., “hi”, “hello”, “how are you”), do not call the tool; respond politely.\n- Send the response as as PDF to the email\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "451f71b7-677a-4543-9f0a-acd9eb38ea6c",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -80,
+        240
+      ],
+      "id": "5a61cc16-bbbe-47f7-828a-2f400ebcf2ce",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "XjbhhzZcP24QrRfh",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-3-large",
+        "options": {
+          "dimensions": 1024
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        512
+      ],
+      "id": "9a4760a9-6ef5-430b-9ba1-e84e6bb1892a",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "XjbhhzZcP24QrRfh",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.rerankerCohere",
+      "typeVersion": 1,
+      "position": [
+        576,
+        512
+      ],
+      "id": "c0a59d5f-030c-4cf1-9120-1bc2628269fe",
+      "name": "Reranker Cohere",
+      "credentials": {
+        "cohereApi": {
+          "id": "ndw8gsYyTto7YwHp",
+          "name": "Cohere account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -352,
+        0
+      ],
+      "id": "d565076d-a6ed-4791-994f-3956713991ea",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst result = items.map((item) => {\n  const date = new Date(item?.json?.timestamp);\n  const month = date.toLocaleString(\"default\", { month: \"long\" });\n  const year = date.getFullYear();\n  const startOfMonth = `1st ${month}`;\n  const endOfMonth = `${new Date(year, date.getMonth() + 1, 0).getDate()}th ${month}`;\n  return { json: { reportMonth: month, startOfMonth, endOfMonth, reportYear: year.toString() } };\n});\nreturn result;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "e0f4a16f-130d-479e-bbb9-2601f93ddea5",
+      "name": "Set Reporting Period"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  item.json.myNewField = 1;\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        0
+      ],
+      "id": "fc9bf764-21c4-49ff-8c80-8cd48f2afe5f",
+      "name": "Build Report Request"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Always use this tool FIRST for any business metrics question (targets, margins, revenue, YoY, 2024/2025). Return the most relevant metric chunks.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "novacart",
+          "mode": "list",
+          "cachedResultName": "novacart"
+        },
+        "useReranker": true,
+        "options": {
+          "pineconeNamespace": "internal"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        176,
+        272
+      ],
+      "id": "72c23d72-d361-41ea-9f69-2fb005aa0620",
+      "name": "Pinecone Vector Internal data store",
+      "credentials": {
+        "pineconeApi": {
+          "id": "sX11T0FqPP2pGdSF",
+          "name": "Pinecone account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Always use this tool FIRST for any business metrics question (targets, margins, revenue, YoY, 2024/2025). Return the most relevant metric chunks.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "novacart",
+          "mode": "list",
+          "cachedResultName": "novacart"
+        },
+        "useReranker": true,
+        "options": {
+          "pineconeNamespace": "external"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        192
+      ],
+      "id": "ade27e8d-6af2-41db-892a-52730e6e1c08",
+      "name": "Pinecone Vector External data store",
+      "credentials": {
+        "pineconeApi": {
+          "id": "sX11T0FqPP2pGdSF",
+          "name": "Pinecone account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  item.json.myNewField = 1;\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        0
+      ],
+      "id": "ffeb79d6-d7e2-4ddc-be6a-f56d6653b0ce",
+      "name": "Prepare Email"
+    },
+    {
+      "parameters": {
+        "sendTo": "shruthidhanavanthri@gmail.com",
+        "subject": "=",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        0
+      ],
+      "id": "c705b90b-09be-4955-9099-2f7765ff8b65",
+      "name": "Send a message",
+      "webhookId": "d0c7d6c4-fdf4-43f5-9ad0-49174849e516",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "LztUARvt5gdfnJhN",
+          "name": "Gmail account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Internal data store",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Pinecone Vector External data store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranker Cohere": {
+      "ai_reranker": [
+        [
+          {
+            "node": "Pinecone Vector Internal data store",
+            "type": "ai_reranker",
+            "index": 0
+          },
+          {
+            "node": "Pinecone Vector External data store",
+            "type": "ai_reranker",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Reporting Period",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Reporting Period": {
+      "main": [
+        [
+          {
+            "node": "Build Report Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Internal data store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector External data store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "a5256aa0-b091-468f-a789-916b2076f76a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d1974aa745ecc34783202e81c35292cddfc4427632d760c79b3c309150ad37a6"
+  },
+  "nodeGroups": [],
+  "id": "uYBelPMI8g9UXc9V",
+  "tags": []
+}
